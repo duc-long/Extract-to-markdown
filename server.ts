@@ -3,10 +3,13 @@ import path from "path";
 import multer from "multer";
 import { createServer as createViteServer } from "vite";
 import fs from "fs";
-import pdfParse from "pdf-parse";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 import mammoth from "mammoth";
 import * as xlsx from "xlsx";
 import Tesseract from "tesseract.js";
+import sharp from "sharp";
 
 // Setup multer for handling file uploads (stored in memory)
 const upload = multer({ 
@@ -15,6 +18,51 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50 MB max
   }
 });
+
+// Heuristic algorithm to improve markdown formatting for offline extraction
+function enhanceMarkdown(text: string): string {
+  if (!text) return "";
+  
+  let processed = text.replace(/\r\n/g, '\n');
+  const lines = processed.split('\n');
+  const result: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].trim();
+    if (!line) {
+      result.push('');
+      continue;
+    }
+
+    // Convert common bullet symbols to markdown lists
+    line = line.replace(/^[•▪►oO]\s+/, '- ');
+
+    // Detect ALL CAPS lines as Headings (length > 3)
+    const isAllCaps = line === line.toUpperCase() && line.length > 3 && /[A-Z]/.test(line);
+    if (isAllCaps && !line.startsWith('#')) {
+      line = `## ${line}`;
+    }
+
+    // Paragraph continuation heuristic
+    // Join lines that are split incorrectly by PDF parsers
+    if (result.length > 0 && result[result.length - 1] !== '') {
+      const prevLine = result[result.length - 1];
+      const prevIsListOrHeading = prevLine.match(/^[-*#0-9]/);
+      const currIsListOrHeading = line.match(/^[-*#0-9]/);
+      const prevEndsWithPunctuation = prevLine.match(/[.:;!?]$/);
+
+      if (!prevIsListOrHeading && !currIsListOrHeading && !prevEndsWithPunctuation) {
+        result[result.length - 1] = prevLine + ' ' + line;
+        continue;
+      }
+    }
+
+    result.push(line);
+  }
+
+  // Clean up multiple empty lines
+  return result.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
 
 async function startServer() {
   const app = express();
@@ -90,7 +138,14 @@ async function startServer() {
         }
       } else if (mimeType.startsWith('image/') || /\.(png|jpe?g|bmp|webp)$/i.test(originalName)) {
         try {
-          const result = await Tesseract.recognize(req.file.buffer, 'eng+vie+chi_sim+kor+jpn');
+          // Image Pre-processing for better OCR
+          const processedImageBuffer = await sharp(req.file.buffer)
+            .grayscale()
+            .normalize() // Enhances contrast
+            .sharpen()
+            .toBuffer();
+
+          const result = await Tesseract.recognize(processedImageBuffer, 'eng+vie+chi_sim+kor+jpn');
           extractedText = result.data.text;
         } catch (imgErr: any) {
            console.error("Image Parse Error:", imgErr);
@@ -99,8 +154,9 @@ async function startServer() {
       } else {
         return res.status(400).json({ error: "Unsupported file type. Please upload a PDF, DOCX, XLSX, or Image file." });
       }
-
-      return res.json({ markdown: extractedText });
+      // Apply the markdown enhancement algorithm before returning
+      const finalMarkdown = enhanceMarkdown(extractedText);
+      return res.json({ markdown: finalMarkdown });
 
     } catch (error: any) {
       console.error("Error during file conversion:", error);
