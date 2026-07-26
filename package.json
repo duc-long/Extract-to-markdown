@@ -1,7 +1,7 @@
 {
-  "name": "react-example",
-  "private": true,
+  "name": "extract-to-markdown",
   "author": "longnvd712",
+  "license": "MIT",
   "version": "0.0.0",
   "type": "module",
   "scripts": {

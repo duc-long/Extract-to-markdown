@@ -37,3 +37,7 @@ A powerful web application designed to extract content from various document typ
    ```
 
 3. Open your browser and navigate to the local URL provided in the terminal to start using the app.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
