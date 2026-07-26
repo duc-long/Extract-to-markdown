@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+body {
+  font-family: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f3f3f3;
+}

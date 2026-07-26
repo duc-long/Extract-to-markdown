@@ -1,0 +1,6 @@
+{
+  "name": "PDF to Markdown",
+  "description": "Convert complex PDFs (including tables and math) to editable Markdown.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
